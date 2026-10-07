@@ -1,0 +1,18 @@
+ai-agents:
+  aliases:
+    - ai-agent
+    - agentic-ai
+    - agents
+
+generative-ai:
+  aliases:
+    - genai
+    - gen-ai
+
+knowledge-management:
+  aliases:
+    - km
+
+context-engineering:
+  aliases:
+    - context-design
