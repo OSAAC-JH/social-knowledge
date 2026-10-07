@@ -1,0 +1,25 @@
+artificial-intelligence:
+  children:
+    - generative-ai
+    - ai-agents
+    - llm
+    - context-engineering
+    - prompt-engineering
+
+finance:
+  children:
+    - securities
+    - banking
+    - investment
+    - fintech
+
+knowledge-work:
+  children:
+    - knowledge-management
+    - productivity
+    - automation
+
+education:
+  children:
+    - edtech
+    - ai-education
