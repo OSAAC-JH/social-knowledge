@@ -7,6 +7,7 @@ from io import BytesIO
 import json
 from pathlib import Path
 import re
+import signal
 import sys
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
@@ -33,6 +34,21 @@ def fetch_post(code):
         media = [{"url": post.url, "is_video": post.is_video}]
     return {"caption": post.caption or "", "author": post.owner_username,
             "published": post.date_utc.date().isoformat(), "media": media}
+
+
+def bounded_post(code):
+    # Unix sandbox guard, including rate-controller waits. Windows uses library timeouts.
+    if not hasattr(signal, "SIGALRM"):
+        return fetch_post(code)
+    def expired(signum, frame):
+        raise TimeoutError("Instagram metadata request exceeded 60 seconds")
+    previous = signal.signal(signal.SIGALRM, expired)
+    signal.alarm(60)
+    try:
+        return fetch_post(code)
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous)
 
 
 def image_bytes(url):
@@ -64,7 +80,7 @@ def ocr(data, language):
         return pytesseract.image_to_string(image, lang=language, timeout=45)
 
 
-def capture(url, language="kor+eng", images=(), provider=fetch_post, reader=image_bytes, recognizer=ocr):
+def capture(url, language="kor+eng", images=(), provider=bounded_post, reader=image_bytes, recognizer=ocr):
     code, source_url = canonical_url(url)
     result = {"shortcode": code, "source_url": source_url, "caption": "",
               "author": None, "published": None, "cards": [], "issues": []}
