@@ -1,0 +1,37 @@
+required:
+  - title
+  - source_type
+  - captured
+  - topics
+  - content_type
+  - status
+
+optional:
+  - source_url
+  - author
+  - published
+  - language
+  - people
+  - organizations
+  - products
+  - source_assets
+  - channel
+  - duration
+  - video_id
+
+allowed_source_types:
+  - instagram
+  - threads
+  - linkedin
+  - youtube
+  - blog
+  - newsletter
+  - web
+  - text
+  - image
+  - pdf
+
+allowed_status:
+  - inbox
+  - processed
+  - reviewed
