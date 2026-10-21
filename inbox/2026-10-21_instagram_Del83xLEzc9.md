@@ -53,6 +53,8 @@ source_assets: []
 
 ## Capture Status
 
+### Initial handoff (before development verification)
+
 - Status: `inbox` — 원문 미확보, 검토·처리 미완료.
 - URL: 경로 `/p/Del83xLEzc9/`에서 shortcode를 확인하고 쿼리 문자열을 제거해 정규화함.
 - Deduplication: 생성 전 `inbox/`, `sources/instagram/`에서 해당 shortcode 파일을 찾지 못함.
@@ -66,6 +68,14 @@ source_assets: []
 - Correction (2026-10-21): 이전 노트에 기록한 합성 이미지 OCR 시험 문구는 원본 게시물과 무관하므로 제거함. 실제 수집·OCR 검증 증거로 사용하지 않을 것.
 - Next step: Instagram 카드 전체 이미지와 캡션 확보 후, 카드별 OCR 검증, 요약·분류, 자산 영구 보존, Source Note 승격.
 
+### Development verification — 2026-10-21
+
+- 실제 네트워크 실행에서 Instaloader로 캡션과 카드 7장을 확보하고, 전체 이미지 디코딩·SHA-256·카드 순서(표지 + 본문 1~6)를 확인함. 원본과 OCR은 로컬 `.capture/`에 보존했으며 Git에 바이너리를 추가하지 않음.
+- gallery-dl은 로그인 페이지 리디렉션으로 차단됨. 대체 추출기 실수집 성공으로 간주하지 않음.
+- 한국어+영어 OCR을 실제 이미지와 대조함. 표지 빈 결과 및 본문 누락/오인식이 남아 전체 전사 검증은 미완료. 임의 문구로 보충하지 않음.
+- [비교·테스트 보고서](../docs/instagram-capture-test-report-2026-10-21.md)에 명령·해시·OCR 한계·테스트 결과를 기록함.
+- Drive 영구 저장 및 검토된 Source Note 승격은 수행하지 않음. `status: inbox`, 기존 My Notes를 유지함.
+
 ## Raw Content
 
-원문 미수집. 확보되지 않은 이미지 또는 캡션 내용을 추정하지 않음.
+실제 캡션·이미지와 미검수 OCR은 개발 검증의 로컬 manifest 및 원본 파일에 보존됨. 이 노트에는 아직 검수된 전사를 병합하지 않음. 누락·오인식 내용을 추정해 보충하지 않음.
