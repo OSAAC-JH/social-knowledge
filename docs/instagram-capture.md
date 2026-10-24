@@ -62,7 +62,9 @@ The `--images` mode does not automatically prove total card count, caption or au
    download directory.
 4. For each matching sidecar metadata file, map `num`, `media_id`, post shortcode,
    expected card count, username, date and original caption into a structured record.
-5. Classify extractor errors (`rate_limited`, `authentication_or_access_denied`,\n   `network_error`, `extractor_or_parsing_error`) without persisting raw stderr.\n6. Compare expected and collected positions; distinguish `missing_card` from
+5. Classify extractor errors (`rate_limited`, `authentication_or_access_denied`,
+   `network_error`, `extractor_or_parsing_error`) without persisting raw stderr.
+6. Compare expected and collected positions; distinguish `missing_card` from
    `empty_ocr`, `media_unavailable`, `ocr_failed` and missing caption metadata.
 7. Compute SHA-256 over downloaded bytes and attempt OCR; preserve the OCR result
    separately from caption and source metadata. Keep incomplete results in `inbox`.
