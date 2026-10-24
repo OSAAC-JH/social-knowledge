@@ -1,36 +1,150 @@
-# Instagram capture MVP
+# Instagram capture MVP - gallery-dl image/carousel path
 
-URL → Instaloader metadata and ordered media → image bytes in memory → Tesseract OCR → inbox Markdown → Work review → GitHub Source Note.
+## Scope and status (2026-10-24)
 
-This implements an independent extractor, not FastVideoSave's undocumented backend. Public availability does not guarantee anonymous requests will work from a sandbox. HTTP 200 can contain a login page instead of usable media metadata. Login, rate limits and network restrictions remain possible. Failures are recorded without fabricating content or retrying indefinitely.
+The capture pipeline uses gallery-dl to fetch Instagram post image files and metadata,
+then verifies ordered card positions, hashes local image bytes and attempts Korean/English
+Tesseract OCR. It generates a **pending-review** Markdown note. This extractor upgrade
+has **only passed offline mocked tests**; real Instagram downloads and Korean OCR quality
+have not been validated in the execution environment.
 
-## Setup and run
+This is not the same thing as successfully capturing
+https://www.instagram.com/p/Del83xLEzc9/ . That post remains in
+`inbox/2026-10-21_instagram_Del83xLEzc9.md` pending real media evidence.
 
-Install Python 3.10+ dependencies with `python -m pip install -r scripts/requirements-instagram.txt`. Install the Tesseract executable and Korean/English language data separately (Ubuntu packages: `tesseract-ocr`, `tesseract-ocr-kor`, `tesseract-ocr-eng`). No GPU is required.
+## Why gallery-dl rather than yt-dlp for images?
 
-Run `python scripts/capture_instagram.py https://www.instagram.com/p/DeJswa7k5zE/ --repo .`.
+- **gallery-dl** implements Instagram media, caption/author metadata, carousels and ordered
+  media indices (`num`). It is the default path for photos and image cards.
+- **yt-dlp** focuses on video and audio. Image-only Instagram carousels are out of its
+  official scope, per its upstream issue #17077 (June 2026).
+- For the present MVP, `gallery-dl` downloads **image previews of video cards** and sets
+  `video_transcription_pending`. Full Reels/video processing with yt-dlp,
+  frame sampling and audio transcription is a separate future stage.
+- Both tools may fail without authentication; the pipeline must report access errors
+  instead of fabricating captions, media or OCR. No third-party downloader sites are
+  called and no credentials are silently requested.
 
-Fallback: `python scripts/capture_instagram.py URL --repo . --images card01.png card02.png`. Images are processed in the explicit argument order. Use this if the source is blocked. No cookies or passwords are required or stored by this MVP.
+## Setup
 
-Exit 0: OCR draft captured (still requires review). Exit 2: partial/failed capture saved. Exit 3: existing inbox note retained; new extraction is printed for explicit merging. Invalid URLs exit 2 before creating a note.
+Python 3.10+:
 
-## Work execution and persistence
+    python -m pip install -r scripts/requirements-instagram.txt
 
-1. Fetch the script and requirements from GitHub into a runtime that supports Python execution and outbound Instagram/CDN connections. Repository storage alone does not create an executable tool or remove network restrictions.
-2. Run capture. Inspect the issues and ordered cards. OCR output is a transcription candidate, not the original binary or a verified claim.
-3. Preserve original images/PDFs separately in Drive and fill `source_assets` with durable references. This MVP processes image bytes in memory and does not upload assets to Drive. CDN URLs expire and must not be used as permanent asset references.
-4. Generate Summary/Claims separately from Raw Content; map topics against `taxonomy/topics.yml` and `taxonomy/aliases.yml`.
-5. If all expected media and raw content are accounted for, save a completed note in `sources/instagram/` and remove/migrate the inbox note with GitHub connector operations or a local Git commit. If incomplete, retain `status: inbox`. Respect existing user notes and review changes before replacing content.
+Install Tesseract separately with Korean and English language packs
+(Ubuntu: `tesseract-ocr`, `tesseract-ocr-kor`, `tesseract-ocr-eng`).
+A network-enabled environment may be required to access permitted public content.
 
-The capture script writes a local draft only. It does not push Git commits, call a summarization API, assign taxonomy or automatically mark `processed`. Work performs those steps using the existing repository rules. Keep downloaded binaries and credentials out of Git.
+## Usage
 
-## Reels
+    python scripts/capture_instagram.py "https://www.instagram.com/p/Del83xLEzc9/" --repo .
 
-Video posts currently OCR only the thumbnail and report `video_transcription_pending`. Full reels require video download, sampled frames plus OCR, audio transcription and timestamp alignment. A thumbnail is never treated as the full video transcript.
+If a note already exists, the command exits early without downloading it. To re-extract
+without overwriting the existing note:
 
-## References
+    python scripts/capture_instagram.py "https://www.instagram.com/p/Del83xLEzc9/" --repo . --refresh
 
-- https://instaloader.github.io/as-module.html
-- https://instaloader.github.io/module/structures.html
+If the original Instagram post cannot be accessed, an operator can supply real
+downloaded image files in the correct card order. Such manually supplied images
+are **not automatically treated as proven Instagram source assets**:
+
+    python scripts/capture_instagram.py "https://www.instagram.com/p/ABC123/" --images card01.jpg card02.jpg
+
+The `--images` mode does not automatically prove total card count, caption or authorship.
+
+## Flow and integrity guarantees
+
+1. Normalize post/reel URL (strip query parameters, reject unrelated hosts/paths).
+2. Check existing `inbox/` and `sources/instagram/` shortcode-named notes **before**
+   making network requests; never silently replace existing `My Notes`.
+3. Run `gallery-dl` as a bounded subprocess with an isolated configuration,
+   short retry budget, a per-image size limit, no interactive prompts and a temporary
+   download directory.
+4. For each matching sidecar metadata file, map `num`, `media_id`, post shortcode,
+   expected card count, username, date and original caption into a structured record.
+5. Classify extractor errors (`rate_limited`, `authentication_or_access_denied`,
+   `network_error`, `extractor_or_parsing_error`) without persisting raw stderr.
+6. Compare expected and collected positions; distinguish `missing_card` from
+   `empty_ocr`, `media_unavailable`, `ocr_failed` and missing caption metadata.
+7. Compute SHA-256 over downloaded bytes and attempt OCR; preserve the OCR result
+   separately from caption and source metadata. Keep incomplete results in `inbox`.
+8. Review captured images and claims before any promotion to `sources/instagram/`.
+
+Missing media, zero OCR text and failed OCR are separate conditions.
+A successful OCR subprocess is **not** proof that its text matches the image.
+Image files are currently temporary and **not** durably uploaded to Google Drive.
+The `source_assets` metadata list must remain empty until durable upload is implemented.
+Instagram CDN URLs must not be treated as durable source asset links.
+
+The output records the identified media index and SHA-256 but does not embed the image
+bytes. Sidecar count/metadata behavior and partial media/video posts still require live
+integration tests. A metadata sidecar without the corresponding image file is an error.
+
+## Verification
+
+Offline tests (fixtures are synthetic, not a transcription of the real Instagram URL):
+
+    python -m unittest discover -s tests -v
+
+As of 2026-10-24: six offline unit tests passed against the refactored capture script.
+No real post media was downloaded or OCR-validated. The execution environment lacked
+`gallery_dl` and `yt_dlp` and could not clone GitHub by direct network connection.
+Run an authenticated *only if explicitly authorized* real-world test under a separate
+operator-controlled environment, keeping browser cookies and session secrets out of Git.
+
+Exit statuses:
+- `0`: local OCR draft without reported capture errors, still subject to review.
+- `2`: capture incomplete or failed, pending review.
+- `3`: an existing shortcode-named note was retained (no write).
+- Invalid URL: argument error, no note written.
+
+## Remaining work
+
+- Install gallery-dl in an environment allowed to access Instagram and execute the
+  test URL; collect sanitized diagnostics distinguishing rate limiting, login,
+  parsing and media-download failures.
+- Validate gallery-dl's metadata sidecars, card count and filenames on real
+  mixed-media Instagram carousels.
+- Visually verify Korean/English OCR per actual image, not synthetic fixtures.
+- Implement secure temporary-to-Google-Drive binary retention with provenance and
+  reliable deduplication. Keep assets and credentials out of Git.
+- Add optional yt-dlp Reels/video stage with timestamped frames, audio transcription
+  and fallback reporting. Do not confuse a video thumbnail with full transcription.
+
+References:
+- https://github.com/mikf/gallery-dl
+- https://github.com/yt-dlp/yt-dlp
+- https://github.com/yt-dlp/yt-dlp/issues/17077
 - https://github.com/madmaze/pytesseract
-- https://fastvideosave.net/photo/
+
+## Real URL attempt - 2026-10-24
+
+URL: https://www.instagram.com/p/De4D0QcD6nY/
+
+The test command was invoked on a local runtime. Direct Instagram DNS lookup failed
+(`curl: (6) Could not resolve host: www.instagram.com`). The runtime also had no
+installed `gallery_dl` module; the capture command exited 2 with 0 cards,
+`gallery_dl_exit:1:unknown_error`, and `no_media_extracted`. There was no
+image file, so no real post OCR, transcription review or caption could be
+performed. This is **not** a verified capture and must not be promoted.
+
+The capture script now supports `--asset-dir DIR` to preserve downloaded image
+bytes and a per-card `card-XX.ocr.txt` next to them, with SHA-256 recorded in
+the report. `--report FILE` saves machine-readable capture outcomes. Images
+are validated by Pillow before processing. `verification_status: not_reviewed`
+is the only automatic result; human comparison is necessary to mark verified.
+
+Verified offline: `python -m unittest discover -s tests -v` passed 7 tests,
+including a synthetic *valid image* end-to-end byte persistence and OCR-text
+persistence test. None of these synthetic fixtures represents the target post.
+
+Example command after installing dependencies and gaining legitimate network
+access:
+
+    python scripts/capture_instagram.py \
+      https://www.instagram.com/p/De4D0QcD6nY/ \
+      --repo . --asset-dir ../instagram-assets/De4D0QcD6nY \
+      --report ../instagram-assets/De4D0QcD6nY/capture-report.json
+
+The `--asset-dir` path must remain outside version control. Google Drive
+upload remains a separate unfinished integration.
