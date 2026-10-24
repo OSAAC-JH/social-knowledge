@@ -3,8 +3,10 @@ import importlib.util
 import json
 from pathlib import Path
 import tempfile
+from io import BytesIO
 from types import SimpleNamespace
 import unittest
+from PIL import Image
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "capture_instagram.py"
 spec = importlib.util.spec_from_file_location("capture_instagram", MODULE_PATH)
@@ -62,20 +64,47 @@ class CaptureTest(unittest.TestCase):
 
     def test_missing_card_distinct_from_blank_ocr(self):
         with tempfile.TemporaryDirectory() as temp:
+            payload = BytesIO()
+            Image.new("RGB", (20, 20), "white").save(payload, format="PNG")
             def provider(code, url, directory):
-                first, third = directory / "1.jpg", directory / "3.jpg"
-                first.write_bytes(b"one")
-                third.write_bytes(b"three")
+                first, third = directory / "1.png", directory / "3.png"
+                first.write_bytes(payload.getvalue())
+                third.write_bytes(payload.getvalue())
                 return {"media": [{"position": 1, "local": first, "is_video": False},
                                   {"position": 3, "local": third, "is_video": False}],
                         "expected_cards": 3, "caption": "", "issues": []}
             result = module.capture("https://www.instagram.com/p/ABC/", provider=provider,
-                                    recognizer=lambda data, lang: "" if data == b"one" else "text")
+                                    recognizer=lambda data, lang: "")
             self.assertIn("missing_card:2", result["issues"])
             self.assertIn("empty_ocr:1", result["issues"])
             self.assertEqual([x["position"] for x in result["cards"]], [1, 3])
             self.assertEqual(result["cards"][0]["media_status"], "downloaded")
             self.assertEqual(result["cards"][0]["ocr_status"], "blank")
+
+    def test_asset_and_ocr_persist_after_temp_cleanup(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            payload = BytesIO()
+            Image.new("RGB", (30, 20), "white").save(payload, format="PNG")
+
+            def provider(code, url, directory):
+                image = directory / "001_test.png"
+                image.write_bytes(payload.getvalue())
+                return {"media": [{"position": 1, "local": image, "is_video": False,
+                                   "media_id": "test"}], "expected_cards": 1,
+                        "caption": "", "issues": []}
+
+            result = module.capture("https://www.instagram.com/p/ABC/",
+                                    provider=provider, asset_dir=root / "assets",
+                                    recognizer=lambda data, lang: "Verified sample OCR")
+            card = result["cards"][0]
+            self.assertEqual(card["media_status"], "downloaded")
+            self.assertEqual(card["ocr_status"], "text")
+            self.assertEqual(card["verification_status"], "not_reviewed")
+            saved = Path(card["asset_path"])
+            self.assertTrue(saved.is_file())
+            self.assertEqual(module.sha256(saved.read_bytes()).hexdigest(), card["sha256"])
+            self.assertEqual((root / "assets" / "card-01.ocr.txt").read_text(), "Verified sample OCR")
 
     def test_download_failure_not_reported_as_empty_text(self):
         def provider(code, url, directory):
