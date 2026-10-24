@@ -50,6 +50,16 @@ class CaptureTest(unittest.TestCase):
             self.assertEqual(result["caption"], "Synthetic sample - not from Instagram")
             self.assertEqual(result["issues"], [])
 
+    def test_auth_failure_is_classified_without_leaking_stderr(self):
+        with tempfile.TemporaryDirectory() as temp:
+            result = module.fetch_post("ABC", "https://www.instagram.com/p/ABC/",
+                                       Path(temp), runner=lambda *a, **kw: SimpleNamespace(
+                                           returncode=1, stderr="Login required: cookie 123456"))
+            self.assertEqual(result["media"], [])
+            self.assertIn("no_media_extracted", result["issues"])
+            self.assertIn("gallery_dl_exit:1:authentication_or_access_denied", result["issues"])
+            self.assertNotIn("123456", str(result))
+
     def test_missing_card_distinct_from_blank_ocr(self):
         with tempfile.TemporaryDirectory() as temp:
             def provider(code, url, directory):
