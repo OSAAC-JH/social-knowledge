@@ -28,6 +28,20 @@ def canonical_url(value):
     return code, f"https://www.instagram.com/{kind}/{code}/"
 
 
+def extractor_failure_category(stderr):
+    """Classify error text without retaining URLs, usernames, or session details."""
+    message = (stderr or "").lower()
+    if any(term in message for term in ("429", "too many requests", "rate limit")):
+        return "rate_limited"
+    if any(term in message for term in ("login", "authenticate", "403", "401", "challenge", "cookies")):
+        return "authentication_or_access_denied"
+    if any(term in message for term in ("timeout", "timed out", "connection", "network", "dns", "hostname")):
+        return "network_error"
+    if any(term in message for term in ("parse", "json", "unsupported", "extractor")):
+        return "extractor_or_parsing_error"
+    return "unknown_error"
+
+
 def fetch_post(code, source_url, directory, runner=subprocess.run):
     """Use gallery-dl's maintained Instagram extractor; download one image per card.
 
@@ -63,14 +77,14 @@ def fetch_post(code, source_url, directory, runner=subprocess.run):
                       "is_video": bool(info.get("video_url")),
                       "media_id": str(info.get("media_id", ""))})
     if completed.returncode:
-        issues.append(f"gallery_dl_exit:{completed.returncode}")
+        issues.append(f"gallery_dl_exit:{completed.returncode}:{extractor_failure_category(completed.stderr)}")
     if not media:
-        raise RuntimeError("No verified Instagram media metadata/files were extracted")
+        issues.append("no_media_extracted")
     if len({item["position"] for item in media}) != len(media):
         issues.append("duplicate_media_positions")
         # Do not silently invent or overwrite the ambiguous ordering.
         media = list({item["position"]: item for item in media}.values())
-    first = metadata[0]
+    first = metadata[0] if metadata else {}
     counts = {entry.get("count") for entry in metadata if type(entry.get("count")) is int}
     expected = next(iter(counts)) if len(counts) == 1 else None
     if expected is None or not 1 <= expected <= 30:
