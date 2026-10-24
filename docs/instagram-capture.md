@@ -62,11 +62,11 @@ The `--images` mode does not automatically prove total card count, caption or au
    download directory.
 4. For each matching sidecar metadata file, map `num`, `media_id`, post shortcode,
    expected card count, username, date and original caption into a structured record.
-5. Compare expected and collected positions; distinguish `missing_card` from
+5. Classify extractor errors (`rate_limited`, `authentication_or_access_denied`,\n   `network_error`, `extractor_or_parsing_error`) without persisting raw stderr.\n6. Compare expected and collected positions; distinguish `missing_card` from
    `empty_ocr`, `media_unavailable`, `ocr_failed` and missing caption metadata.
-6. Compute SHA-256 over downloaded bytes and attempt OCR; preserve the OCR result
+7. Compute SHA-256 over downloaded bytes and attempt OCR; preserve the OCR result
    separately from caption and source metadata. Keep incomplete results in `inbox`.
-7. Review captured images and claims before any promotion to `sources/instagram/`.
+8. Review captured images and claims before any promotion to `sources/instagram/`.
 
 Missing media, zero OCR text and failed OCR are separate conditions.
 A successful OCR subprocess is **not** proof that its text matches the image.
@@ -84,7 +84,7 @@ Offline tests (fixtures are synthetic, not a transcription of the real Instagram
 
     python -m unittest discover -s tests -v
 
-As of 2026-10-24: five offline unit tests passed against the refactored capture script.
+As of 2026-10-24: six offline unit tests passed against the refactored capture script.
 No real post media was downloaded or OCR-validated. The execution environment lacked
 `gallery_dl` and `yt_dlp` and could not clone GitHub by direct network connection.
 Run an authenticated *only if explicitly authorized* real-world test under a separate
