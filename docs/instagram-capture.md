@@ -116,3 +116,35 @@ References:
 - https://github.com/yt-dlp/yt-dlp
 - https://github.com/yt-dlp/yt-dlp/issues/17077
 - https://github.com/madmaze/pytesseract
+
+## Real URL attempt - 2026-10-24
+
+URL: https://www.instagram.com/p/De4D0QcD6nY/
+
+The test command was invoked on a local runtime. Direct Instagram DNS lookup failed
+(`curl: (6) Could not resolve host: www.instagram.com`). The runtime also had no
+installed `gallery_dl` module; the capture command exited 2 with 0 cards,
+`gallery_dl_exit:1:unknown_error`, and `no_media_extracted`. There was no
+image file, so no real post OCR, transcription review or caption could be
+performed. This is **not** a verified capture and must not be promoted.
+
+The capture script now supports `--asset-dir DIR` to preserve downloaded image
+bytes and a per-card `card-XX.ocr.txt` next to them, with SHA-256 recorded in
+the report. `--report FILE` saves machine-readable capture outcomes. Images
+are validated by Pillow before processing. `verification_status: not_reviewed`
+is the only automatic result; human comparison is necessary to mark verified.
+
+Verified offline: `python -m unittest discover -s tests -v` passed 7 tests,
+including a synthetic *valid image* end-to-end byte persistence and OCR-text
+persistence test. None of these synthetic fixtures represents the target post.
+
+Example command after installing dependencies and gaining legitimate network
+access:
+
+    python scripts/capture_instagram.py \
+      https://www.instagram.com/p/De4D0QcD6nY/ \
+      --repo . --asset-dir ../instagram-assets/De4D0QcD6nY \
+      --report ../instagram-assets/De4D0QcD6nY/capture-report.json
+
+The `--asset-dir` path must remain outside version control. Google Drive
+upload remains a separate unfinished integration.
