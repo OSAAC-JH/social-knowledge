@@ -39,6 +39,7 @@ def fetch_post(code, source_url, directory, runner=subprocess.run):
                "--filesize-max", "25m", "--directory", str(directory),
                "--filename", "{num:03}_{media_id}.{extension}",
                "--write-metadata", "--option", "extractor.instagram.videos=false",
+               "--option", "extractor.instagram.previews=video",
                source_url]
     completed = runner(command, capture_output=True, text=True, timeout=300)
     media = []
