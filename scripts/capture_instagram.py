@@ -114,7 +114,7 @@ def ocr(data, language):
         return pytesseract.image_to_string(image, lang=language, timeout=45)
 
 
-def capture(url, language="kor+eng", images=(), provider=fetch_post, recognizer=ocr):
+def capture(url, language="kor+eng", images=(), provider=fetch_post, recognizer=ocr, asset_dir=None):
     code, source_url = canonical_url(url)
     result = {"shortcode": code, "source_url": source_url, "caption": None,
               "author": None, "published": None, "expected_cards": None,
@@ -145,7 +145,8 @@ def capture(url, language="kor+eng", images=(), provider=fetch_post, recognizer=
             card = {"position": position,
                     "kind": "video_thumbnail" if item["is_video"] else "image",
                     "media_id": item.get("media_id"), "sha256": None,
-                    "text": "", "media_status": "missing", "ocr_status": "not_run"}
+                    "text": "", "media_status": "missing", "ocr_status": "not_run",
+                    "asset_path": None, "verification_status": "not_reviewed"}
             if item["is_video"]:
                 result["issues"].append(f"video_transcription_pending:{position}")
             try:
@@ -153,9 +154,19 @@ def capture(url, language="kor+eng", images=(), provider=fetch_post, recognizer=
                 if path.stat().st_size > MAX_IMAGE_BYTES or path.stat().st_size == 0:
                     raise ValueError("Image empty or exceeds 25 MiB")
                 data = path.read_bytes()
+                from PIL import Image
+                with Image.open(BytesIO(data)) as image:
+                    image.verify()
                 card["sha256"] = sha256(data).hexdigest()
                 card["media_status"] = "downloaded"
-            except (OSError, ValueError) as exc:
+                if asset_dir is not None:
+                    target_dir = Path(asset_dir)
+                    target_dir.mkdir(parents=True, exist_ok=True)
+                    suffix = path.suffix.lower() if path.suffix.lower() in IMAGE_EXTENSIONS else ".img"
+                    asset = target_dir / f"card-{position:02d}{suffix}"
+                    asset.write_bytes(data)
+                    card["asset_path"] = str(asset)
+            except Exception as exc:
                 result["issues"].append(f"media_unavailable:{position}:{type(exc).__name__}")
                 result["cards"].append(card)
                 continue
@@ -167,6 +178,9 @@ def capture(url, language="kor+eng", images=(), provider=fetch_post, recognizer=
             except Exception as exc:
                 card["ocr_status"] = "failed"
                 result["issues"].append(f"ocr_failed:{position}:{type(exc).__name__}")
+            if asset_dir is not None:
+                text_path = Path(asset_dir) / f"card-{position:02d}.ocr.txt"
+                text_path.write_text(card["text"], encoding="utf-8")
             result["cards"].append(card)
         expected = result["expected_cards"]
         if expected is None:
@@ -219,6 +233,9 @@ def main():
     parser.add_argument("--images", type=Path, nargs="*", default=[])
     parser.add_argument("--refresh", action="store_true",
                         help="Re-extract for inspection even if an inbox/source note exists")
+    parser.add_argument("--asset-dir", type=Path,
+                        help="Persist validated card images and raw OCR text outside Git")
+    parser.add_argument("--report", type=Path, help="Write structured extraction diagnostics as JSON")
     args = parser.parse_args()
     try:
         code, _ = canonical_url(args.url)
@@ -232,7 +249,10 @@ def main():
         print(f"Existing note retained: {matches[0]}. Use --refresh for inspection.",
               file=sys.stderr)
         return 3
-    result = capture(args.url, args.lang, args.images)
+    result = capture(args.url, args.lang, args.images, asset_dir=args.asset_dir)
+    if args.report is not None:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     if matches:
         print("Existing note retained; review/merge extraction explicitly.", file=sys.stderr)
         print(json.dumps(result, ensure_ascii=False, indent=2))
